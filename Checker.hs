@@ -62,7 +62,7 @@ defsRNCheck defs = case joinChecks (checkFuncNames defs) (checkVars defs) of
     checkFuncNames xs = 
       let names = funcNames xs
           repNames = repetidas names []
-      in if null repNames then Ok else Wrong repNames
+      in if null repNames then Wrong [Duplicated "Chau"] else Wrong repNames
 
     checkVar (FunDef (name,_) xs _) =
       let repVars = repetidas xs []
@@ -70,7 +70,7 @@ defsRNCheck defs = case joinChecks (checkFuncNames defs) (checkVars defs) of
     
     funcNames [] = []
     funcNames [(FunDef (name,_) _ _)] = [name]
-    funcNames (x:xs) = funcNames x ++ funcNames xs
+    funcNames (x:xs) = funcNames [x] ++ funcNames xs
 
     repetidas [] _ = []
     repetidas (y:ys) vistas
@@ -78,14 +78,8 @@ defsRNCheck defs = case joinChecks (checkFuncNames defs) (checkVars defs) of
       | otherwise = repetidas ys (y : vistas)
 
 
-exprRNCheck :: Expr -> Checked
-exprRNCheck _ = Ok
 repeatedNameCheck :: Program -> Checked
-repeatedNameCheck (Program defs expr) = do
-  let defsResult = defsRNCheck defs
-  let exprResult = exprRNCheck expr
-  joinChecks defsResult exprResult
-
+repeatedNameCheck (Program defs _) = defsRNCheck defs
 paramCheck :: Program -> Checked
 -- paramCheck _ = Wrong [Duplicated "Chau"]
 paramCheck _ = Ok
