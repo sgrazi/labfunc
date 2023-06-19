@@ -31,14 +31,14 @@ data Type = TyInt | TyBool
 
 data Program = Program Defs Expr 
 
-type Name  = String
+type Name = String
 
 type Defs = [FunDef]
 
 type TypedVar = (Name, Type)
 type TypedFun = (Name, Sig)
 
-data FunDef  = FunDef TypedFun [Name]  Expr
+data FunDef  = FunDef TypedFun [Name] Expr
 
 data Sig = Sig [Type] Type
            
