@@ -11,4 +11,5 @@ return (_y); };
 return (_let3(2)); };
 return ((_let2(1) + _let4(1))); };
 
+int main() {
 printf("%d\n",23 + 4); }
