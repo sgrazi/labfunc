@@ -114,14 +114,12 @@ findUndefinedNames expr inputNames = nub $ findMissingNames expr inputNames []
   where
     findMissingNames :: Expr -> [Name] -> [Name] -> [Name]
     findMissingNames expr names acc = case expr of
-      Var name -> if name `elem` acc then acc else name : acc
+      Var name -> if name `elem` names then acc else name : acc
       IntLit _ -> acc
       BoolLit _ -> acc
       Infix _ x y -> findMissingNames x names (findMissingNames y names acc)
       If x y z -> findMissingNames x names (findMissingNames y names (findMissingNames z names acc))
-      Let (name, _) x y -> findMissingNames x names (name : acc) ++ findMissingNames y names (name : acc)
-      -- TODO: ver si es necesario que se revise si name esta en la lista de variables no definidas (acc)
-      -- App name args -> if name `elem` acc || name `elem` names then acc else name : acc ++ concatMap (`findMissingNames'` names) args
+      Let (name, _) x y -> findMissingNames x (name : names) acc ++ findMissingNames y (name : names) acc
       App name args -> if name `elem` names then acc else name : concatMap (\arg -> findMissingNames arg names []) args ++ acc
 
 declaredNameCheck :: Program -> Checked
