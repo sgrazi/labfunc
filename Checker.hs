@@ -16,7 +16,7 @@ import Syntax
 
 import Data.List
 import Data.Maybe
-import Debug.Trace
+
 -- CHECKER
 type EnvFunc = [(Name, (Type, [Type]))]
 
@@ -27,7 +27,6 @@ data Error = Duplicated      Name
            | ArgNumDef       Name Int Int
            | ArgNumApp       Name Int Int
            | Expected        Type Type
-           | ERROR           Name
             
 instance Show Error where
  show (Duplicated      n)  = "Duplicated declaration: " ++ n
@@ -40,8 +39,6 @@ instance Show Error where
      " doesn't match the signature ("++ show d ++ " vs " ++ show s ++ ")"
  show (Expected    ty ty')
    = "Expected: " ++ show ty ++ " Actual: " ++ show ty'
- show (ERROR    e)
-   = "EXPLOTO: " ++ show e
 
 -- start
 
@@ -84,7 +81,7 @@ repeatedNameCheck (Program defs _) = case joinChecks (checkFuncNames defs) (chec
       | otherwise = repetidas ys (y : vistas)
 
 paramCheck :: Program -> Checked
-paramCheck (Program defs expr) = case joinChecks (checkParamAmountDefs defs) (checkParamAmountExpr expr) of
+paramCheck (Program defs expr) = case joinChecks checkParamAmountDefs defs of
   Ok -> Ok
   Wrong errors -> Wrong errors
   where
@@ -96,8 +93,6 @@ paramCheck (Program defs expr) = case joinChecks (checkParamAmountDefs defs) (ch
     compareArguments functionName (Sig types _) argNames
       | length types == length argNames = Ok
       | otherwise = Wrong [ArgNumDef functionName (length types) (length argNames)]
-    
-    checkParamAmountExpr _ = Ok -- TODO
 
 getNames :: Expr -> [Name]
 getNames expr = nub $ case expr of
@@ -132,11 +127,11 @@ declaredNameCheck (Program defs expr) = case joinChecks (checkDefs defs) (checkE
       
     checkDeclDefs (FunDef (name,_) xs expr) = 
       let undefs = (getNames expr) \\ (name:xs)
-      in if null undefs then Ok else trace ("es en las funciones") $ Wrong (map (\name -> Undefined name) undefs)
+      in if null undefs then Ok else Wrong (map (\name -> Undefined name) undefs)
 
     checkExpr expr defs = 
       let missingNames = findUndefinedNames expr (getFuncNames defs)
-      in if null missingNames then Ok else trace ("es en las expr") $ Wrong (map (\name -> Undefined name) missingNames)
+      in if null missingNames then Ok else Wrong (map (\name -> Undefined name) missingNames)
 
 compareTypes :: Type -> Type -> Checked
 compareTypes TyBool TyInt = Wrong [Expected TyBool TyInt]
@@ -147,7 +142,7 @@ getType :: Expr -> Env -> EnvFunc -> Type
 getType expr env envFunc = case expr of
   Var name -> case lookup name env of
     Just varType -> varType
-    Nothing -> trace ("Error " ++ show name) $ TyInt -- TODO BORRAR
+    Nothing -> TyInt -- error
   IntLit _ -> TyInt
   BoolLit _ -> TyBool
   Infix op x y -> case op of
@@ -160,13 +155,13 @@ getType expr env envFunc = case expr of
   Let (name, varType) x y -> getType y (env ++ [(name, varType)]) envFunc
   App name exprArr -> case lookup name envFunc of
     Just (returnType, _) -> returnType
-    Nothing -> trace ("Error " ++ show name) $ TyInt -- TODO BORRAR
+    Nothing -> TyInt -- error
 
 checkExprType :: Expr -> Type -> Env -> EnvFunc -> Checked
 checkExprType expr rtrn env envFunc = case expr of
   Var name -> case lookup name env of
     Just varType -> compareTypes rtrn varType
-    Nothing -> trace ("Error " ++ show name) $ Wrong [ERROR ("No encontro name de var " ++ name)] -- TODO BORRRAR
+    Nothing -> Ok -- error
   IntLit int -> compareTypes rtrn TyInt
   BoolLit bool -> compareTypes rtrn TyBool
   Infix op x y -> 
@@ -188,14 +183,17 @@ checkExprType expr rtrn env envFunc = case expr of
   Let (name, varType) x y -> joinChecks (checkExprType x varType env envFunc) (checkExprType y rtrn (env ++ [(name, varType)]) envFunc)
   App name exprArr -> case lookup name envFunc of
     Just (returnType, typeArr) -> case returnType of
-       expectedType | expectedType == rtrn -> joinChecksArray (map (\(expr, exprType) -> checkExprType expr exprType env envFunc) (zip exprArr typeArr))
-                    | otherwise -> joinChecks (Wrong [Expected rtrn returnType]) (joinChecksArray (map (\(expr, exprType) -> checkExprType expr exprType env envFunc) (zip exprArr typeArr)))
-    Nothing -> trace ("Error " ++ show name) $ Wrong [ERROR ("No encontro name de func " ++ name)] -- TODO BORRRAR
+       expectedType | expectedType == rtrn -> joinChecks (checkArgNumApp name exprArr envFunc) (joinChecksArray (map (\(expr, exprType) -> checkExprType expr exprType env envFunc) (zip exprArr typeArr)))
+                    | otherwise -> joinChecks (Wrong [Expected rtrn returnType]) (joinChecks (checkArgNumApp name exprArr envFunc) (joinChecksArray (map (\(expr, exprType) -> checkExprType expr exprType env envFunc) (zip exprArr typeArr))))
+    Nothing -> Ok -- error
+
+checkArgNumApp :: Name -> [Expr] -> EnvFunc -> Checked
+checkArgNumApp name exprArr envFunc = case lookup name envFunc of
+  Just (_, args) -> if length args /= length exprArr then Wrong [ArgNumApp name (length args) (length exprArr)] else Ok
+  Nothing -> Ok -- error
 
 checkFuncTypes :: FunDef  -> Checked
-checkFuncTypes (FunDef (name, (Sig types returnType)) names expr) = case checkExprType expr returnType (zip names types) [(name, (returnType, types))] of
-  Ok -> Ok
-  Wrong errors -> Wrong errors
+checkFuncTypes (FunDef (name, (Sig types returnType)) names expr) = checkExprType expr returnType (zip names types) [(name, (returnType, types))]
 
 typeCheck :: Program -> Checked
 typeCheck (Program defs expr) = case joinChecks (checkDefs defs) (checkExpr defs expr []) of
@@ -218,8 +216,8 @@ typeCheck (Program defs expr) = case joinChecks (checkDefs defs) (checkExpr defs
       If x y z -> joinChecks (checkExprType x TyBool env (genEnvFunc defs)) (joinChecks (checkExprType y (getType y env (genEnvFunc defs)) env (genEnvFunc defs)) (checkExprType z (getType y env (genEnvFunc defs)) env (genEnvFunc defs)))
       Let (name, varType) x y -> joinChecks (checkExprType x varType env (genEnvFunc defs)) (checkExpr defs y (env ++ [(name, varType)]))
       App name exprArr -> case lookup name (genEnvFunc defs) of
-        Just (_, typeArr) -> joinChecksArray (map (\(expr, exprType) -> checkExprType expr exprType env (genEnvFunc defs)) (zip exprArr typeArr))
-        Nothing -> trace ("Error " ++ show name) $ Wrong [ERROR ("No encontro name de func " ++ name)] -- TODO BORRRAR
+        Just (_, typeArr) -> joinChecks (checkArgNumApp name exprArr (genEnvFunc defs)) (joinChecksArray (map (\(expr, exprType) -> checkExprType expr exprType env (genEnvFunc defs)) (zip exprArr typeArr)))
+        Nothing -> Ok -- error
     
     genEnvFunc [] = []
     genEnvFunc (x:xs) = addFunc x ++ genEnvFunc xs

@@ -12,7 +12,6 @@ module LetElim where
 
 import Syntax
 import Data.List
-import Debug.Trace
 
 -- ELIMINACION DE LETs
 

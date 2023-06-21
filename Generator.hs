@@ -14,7 +14,6 @@ import Syntax
 -- en caso de ser necesario
 
 import Data.List
-import Debug.Trace
 
 type LetEnv = [(Name, Integer)]
 
@@ -67,7 +66,7 @@ genExpr expr e = case expr of
     If x y z -> parentesis x e ++ "?" ++ parentesis y e ++ ":" ++ parentesis z e
     Let (name, _) x _ -> case lookup name e of
         Just i -> "_let" ++ show i ++ "(" ++ genExpr x (remove e (name, i)) ++ ")"
-        Nothing -> trace ("No encontro el let " ++ name ++ " en " ++ show e) $ " ERROR "
+        Nothing -> " ERROR "
     App name exprArr -> "_" ++ name ++ "(" ++ intercalate ", " (map (\expr -> parentesis expr e) exprArr) ++ ")"
 
 remove :: LetEnv -> (String, Integer) -> LetEnv
