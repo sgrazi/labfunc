@@ -12,30 +12,39 @@ module LetElim where
 
 import Syntax
 import Data.List
-
+import Debug.Trace
 
 -- ELIMINACION DE LETs
 
 letElimP :: Program -> Program 
 letElimP (Program funcs expr) = Program (letElimFunc funcs) (letElimExpr expr)
 
+letElimFunc :: Defs -> Defs
+letElimFunc [] = []
+letElimFunc (FunDef def names funcExpr : xs) =
+    FunDef def names (letElimExpr funcExpr) : letElimFunc xs
+
 letElimExprArr :: [Expr] -> [Expr]
 letElimExprArr [] = []
 letElimExprArr (x:xs) = letElimExpr x : letElimExprArr xs
 
 letElimExpr :: Expr -> Expr
-letElimExpr (Var x) = Var x
-letElimExpr (IntLit x) = IntLit x
-letElimExpr (BoolLit x) = BoolLit x
 letElimExpr (Infix op x y) = Infix op (letElimExpr x) (letElimExpr y)
 letElimExpr (If x y z) = If (letElimExpr x) (letElimExpr y) (letElimExpr z)
-letElimExpr (Let (name, varType) x y) = letElimExpr (subst name x y)
+letElimExpr (Let (name, varType) x y) = case x of
+    (IntLit n) -> 
+        let expr = letElimExpr y in
+            subst name x expr
+    (BoolLit b) -> 
+        let expr = letElimExpr y in
+            subst name x expr
+    (Let (n, v) i j) ->
+        let expr = letElimExpr i in
+            let expr2 = subst n expr j in
+                subst n expr2 y
+    otherwise -> (Let (name, varType) x (letElimExpr y))
 letElimExpr (App name exprArr) = App name (letElimExprArr exprArr)
-
-letElimFunc :: Defs -> Defs
-letElimFunc [] = []
-letElimFunc (FunDef def names funcExpr : xs) =
-    FunDef def names (letElimExpr funcExpr) : letElimFunc xs
+letElimExpr x = x
 
 subst :: Name -> Expr -> Expr -> Expr 
 subst n e1 (Var x) = if x == n then e1 else Var x
